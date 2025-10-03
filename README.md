@@ -1,74 +1,69 @@
-# Welcome to your Lovable project
+# Eventflow Hackathon Project
 
-## Project info
+## Project Overview
+**Eventflow** is a hackathon project designed to automate certificate generation and distribution for events. It allows organizers to manage participants, generate certificates with unique QR codes, and send them efficiently via email.
 
-**URL**: https://lovable.dev/projects/ac4a8234-43d0-4933-b059-cf43e9d3fa6e
+website="https://digital-seal-ai-main-pygvovicd-soubhik19s-projects.vercel.app/"
 
-## How can I edit this code?
+## Features
+- Upload participant data via CSV.
+- Generate certificates automatically.
+- Add unique QR codes to each certificate.
+- Send certificates via email in bulk.
+- User-friendly interface with real-time previews.
 
-There are several ways of editing your application.
+## Tech Stack
+- Frontend: HTML, TailwindCSS, JavaScript
+- Backend: Node.js
+- Database: Supabase
+- Others: EmailJS for email automation
 
-**Use Lovable**
+## Getting Started
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/ac4a8234-43d0-4933-b059-cf43e9d3fa6e) and start prompting.
+### Prerequisites
+- Node.js & npm installed
+- Supabase account and project set up
+- EmailJS account configured
 
-Changes made via Lovable will be committed automatically to this repo.
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/Soubhik19/Eventflow-Hackthon.git
 
-**Use your preferred IDE**
+# Navigate to project directory
+cd Eventflow-Hackthon
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+# Install dependencies
+npm install
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
-```
+Configuration
 
-**Edit a file directly in GitHub**
+Rename .env.example to .env.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Add your Supabase and EmailJS credentials in the .env file.
 
-**Use GitHub Codespaces**
+Workflow
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Upload a CSV file containing participant names and emails.
 
-## What technologies are used for this project?
+Certificates are generated automatically with QR codes.
 
-This project is built with:
+Organizers can review certificates in the dashboard.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Send certificates via email to all participants in bulk.
 
-## How can I deploy this project?
+Database updates are made automatically for tracking.
 
-Simply open [Lovable](https://lovable.dev/projects/ac4a8234-43d0-4933-b059-cf43e9d3fa6e) and click on Share -> Publish.
+Contributing
 
-## Can I connect a custom domain to my Lovable project?
+Fork the repository.
 
-Yes, you can!
+Create a new branch: git checkout -b feature/your-feature.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Commit your changes: git commit -m 'Add some feature'.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
-# Eventflow-Hackthon
+Push to the branch: git push origin feature/your-feature.
+
+Open a Pull Request.
