@@ -16,8 +16,10 @@ export const generateCertificateHash = (
   timestamp: string
 ): string => {
   try {
-    // Simple hash generation without external crypto library
-    const data = `${participantId}-${eventId}-${timestamp}`;
+    // Add random component to ensure uniqueness
+    const randomSuffix = Math.random().toString(36).substring(2, 10);
+    const data = `${participantId}-${eventId}-${timestamp}-${randomSuffix}`;
+    
     // Use browser's built-in crypto API or fallback to simple encoding
     if (window.crypto && window.crypto.subtle) {
       // Use a simple hash based on participant ID and timestamp

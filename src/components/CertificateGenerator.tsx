@@ -98,14 +98,31 @@ const CertificateGenerator = ({
       console.log('Certificate records to insert:', certificateRecords);
       console.log('Sample certificate record:', certificateRecords[0]);
 
+      // First, delete any existing certificates for this event to avoid conflicts
+      const { error: deleteError } = await supabase
+        .from("certificates")
+        .delete()
+        .eq("event_id", eventId);
+
+      if (deleteError) {
+        console.warn("Could not delete existing certificates:", deleteError);
+        // Continue anyway, might be first time generating
+      }
+
       const { error: insertError } = await supabase
         .from("certificates")
         .insert(certificateRecords);
 
       if (insertError) {
         console.error("Database insert error:", insertError);
+        console.error("Error details:", {
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code
+        });
         console.error("Certificate records that failed:", certificateRecords);
-        throw new Error("Failed to save certificates to database");
+        throw new Error(`Failed to save certificates to database: ${insertError.message}`);
       }
 
       // Create ZIP file with all certificates
@@ -186,15 +203,16 @@ const CertificateGenerator = ({
       );
 
       toast({
-        title: "📧 Email Status",
-        description: `Successfully prepared ${result.success} emails. ${result.failed > 0 ? `${result.failed} failed.` : 'All participants notified!'}`,
+        title: "📧 Email Preparation Complete",
+        description: `Emails prepared for ${result.success} participants. ${result.failed > 0 ? `${result.failed} failed.` : 'Check your email client!'}`,
       });
 
       if (result.success > 0) {
         // Show instructions for email sending
         toast({
           title: "📬 Email Instructions",
-          description: "Email clients opened for each participant. Please send the emails from your default email app.",
+          description: "Your email client will open with either: 1) One email to all participants (BCC), or 2) Individual emails. Choose your preferred option in the dialog.",
+          duration: 8000,
         });
       }
 
@@ -337,12 +355,12 @@ const CertificateGenerator = ({
                       disabled={participantData.length === 0}
                     >
                       <Mail className="mr-2 h-5 w-5" />
-                      Send Certificates via Email ({participantData.length} recipients)
+                      📧 Email All Participants ({participantData.length} recipients)
                     </Button>
                   )}
                   
                   <p className="text-xs text-green-600 mt-2">
-                    Opens email clients with pre-filled certificates for each participant
+                    Choose: Send one email to all (BCC) or individual emails to each participant
                   </p>
                 </div>
                 
