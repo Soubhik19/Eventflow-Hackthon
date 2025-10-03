@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Certificate Test</title>
+</head>
+<body>
+    <h1>Direct Certificate Generation Test</h1>
+    <p>This is a simple test page to verify certificate generation works</p>
+    <button onclick="testCertificate()">Test Certificate Generation</button>
+    <div id="result"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    
+    <script>
+        async function testCertificate() {
+            const { jsPDF } = window.jspdf;
+            
+            try {
+                // Generate QR code
+                const qrCodeDataURL = await QRCode.toDataURL('https://example.com/verify?id=test123', {
+                    width: 200,
+                    margin: 2
+                });
+                
+                // Create PDF
+                const pdf = new jsPDF({
+                    orientation: 'landscape',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                pdf.setFontSize(24);
+                pdf.text('Certificate of Participation', 148.5, 50, { align: 'center' });
+                
+                pdf.setFontSize(16);
+                pdf.text('Test Participant', 148.5, 80, { align: 'center' });
+                
+                pdf.addImage(qrCodeDataURL, 'PNG', 20, 150, 30, 30);
+                
+                // Download
+                pdf.save('test-certificate.pdf');
+                
+                document.getElementById('result').innerHTML = '<p style="color: green;">✅ Certificate generation successful!</p>';
+            } catch (error) {
+                document.getElementById('result').innerHTML = '<p style="color: red;">❌ Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
