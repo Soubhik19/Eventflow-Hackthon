@@ -32,6 +32,15 @@ const CertificateGenerator = ({
   const [participantData, setParticipantData] = useState<Array<{ name: string; email: string; certificateHash: string }>>([]);
   const { toast } = useToast();
 
+  // Check if EmailJS is configured
+  const isEmailJSConfigured = 
+    import.meta.env.VITE_EMAILJS_SERVICE_ID && 
+    import.meta.env.VITE_EMAILJS_TEMPLATE_ID && 
+    import.meta.env.VITE_EMAILJS_PUBLIC_KEY &&
+    import.meta.env.VITE_EMAILJS_SERVICE_ID !== 'your_service_id_here' &&
+    import.meta.env.VITE_EMAILJS_TEMPLATE_ID !== 'your_template_id_here' &&
+    import.meta.env.VITE_EMAILJS_PUBLIC_KEY !== 'your_public_key_here';
+
   const handleGenerateCertificates = async () => {
     if (participantCount === 0) {
       toast({
@@ -192,6 +201,28 @@ const CertificateGenerator = ({
       return;
     }
 
+    // Check EmailJS configuration
+    const isEmailJSConfigured = 
+      import.meta.env.VITE_EMAILJS_SERVICE_ID && 
+      import.meta.env.VITE_EMAILJS_TEMPLATE_ID && 
+      import.meta.env.VITE_EMAILJS_PUBLIC_KEY &&
+      import.meta.env.VITE_EMAILJS_SERVICE_ID !== 'your_service_id' &&
+      import.meta.env.VITE_EMAILJS_TEMPLATE_ID !== 'your_template_id' &&
+      import.meta.env.VITE_EMAILJS_PUBLIC_KEY !== 'your_public_key';
+
+    if (isEmailJSConfigured) {
+      toast({
+        title: "🚀 Starting Automated Email Delivery",
+        description: `Sending personalized emails to ${participantData.length} participants automatically...`,
+      });
+    } else {
+      toast({
+        title: "📧 Preparing Personal Emails",
+        description: `Creating ${participantData.length} personalized email drafts - each participant gets only their own certificate details!`,
+        duration: 6000,
+      });
+    }
+
     setIsEmailSending(true);
     setEmailProgress(0);
 
@@ -202,17 +233,26 @@ const CertificateGenerator = ({
         (progress) => setEmailProgress(progress)
       );
 
-      toast({
-        title: "📧 Email Preparation Complete",
-        description: `Emails prepared for ${result.success} participants. ${result.failed > 0 ? `${result.failed} failed.` : 'Check your email client!'}`,
-      });
-
-      if (result.success > 0) {
-        // Show instructions for email sending
+      if (isEmailJSConfigured) {
+        // Automated sending complete
         toast({
-          title: "📬 Email Instructions",
-          description: "Your email client will open with either: 1) One email to all participants (BCC), or 2) Individual emails. Choose your preferred option in the dialog.",
+          title: "✅ Automated Email Delivery Complete!",
+          description: `Successfully sent ${result.success} personalized emails! ${result.failed > 0 ? `${result.failed} failed - check console for details.` : 'All emails delivered automatically!'}`,
           duration: 8000,
+        });
+      } else {
+        // Manual sending with email client
+        toast({
+          title: "� Email Drafts Ready",
+          description: `Email drafts prepared for ${result.success} participants. Check your email client and send manually.`,
+          duration: 8000,
+        });
+        
+        // Show setup instructions
+        toast({
+          title: "💡 Want Automated Emails?",
+          description: "Set up EmailJS in your .env file to send emails automatically without manual clicking!",
+          duration: 10000,
         });
       }
 
@@ -229,17 +269,18 @@ const CertificateGenerator = ({
   };
 
   return (
-    <Card className="border-2 border-green-200">
-      <CardHeader className="bg-green-50">
-        <CardTitle className="flex items-center gap-2 text-green-800">
-          <Award className="h-5 w-5" />
-          Certificate Generator
-        </CardTitle>
-        <CardDescription className="text-green-600">
-          Generate professional certificates with QR codes for all participants
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6 p-6">
+    <div className="space-y-6">
+      <Card className="border-2 border-green-200">
+        <CardHeader className="bg-green-50">
+          <CardTitle className="flex items-center gap-2 text-green-800">
+            <Award className="h-5 w-5" />
+            Certificate Generator
+          </CardTitle>
+          <CardDescription className="text-green-600">
+            Generate professional certificates with QR codes for all participants
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 p-6">
         {/* Stats Display */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -355,12 +396,12 @@ const CertificateGenerator = ({
                       disabled={participantData.length === 0}
                     >
                       <Mail className="mr-2 h-5 w-5" />
-                      📧 Email All Participants ({participantData.length} recipients)
+                      � Send Automated Emails to All ({participantData.length} participants)
                     </Button>
                   )}
                   
                   <p className="text-xs text-green-600 mt-2">
-                    Choose: Send one email to all (BCC) or individual emails to each participant
+                    Each participant gets their own email with unique certificate ID, QR code, and verification URL
                   </p>
                 </div>
                 
@@ -373,6 +414,7 @@ const CertificateGenerator = ({
         )}
       </CardContent>
     </Card>
+  </div>
   );
 };
 

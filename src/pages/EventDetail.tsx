@@ -14,6 +14,7 @@ import TestCertificateGenerator from "@/components/TestCertificateGenerator";
 import CertificateDemo from "@/components/CertificateDemo";
 import SimpleTest from "@/components/SimpleTest";
 import DebugCertificate from "@/components/DebugCertificate";
+import EmailTest from "@/components/EmailTest";
 
 interface Event {
   id: string;
@@ -155,6 +156,9 @@ const EventDetail = () => {
             <Award className="mr-2 h-4 w-4" />
             Certificates
           </TabsTrigger>
+          <TabsTrigger value="email-test">
+            📧 Email Test
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="participants" className="space-y-4">
@@ -172,7 +176,7 @@ const EventDetail = () => {
         </TabsContent>
 
         <TabsContent value="certificates" className="space-y-4">
-          <DebugCertificate 
+          <CertificateGenerator 
             eventId={id!}
             eventTitle={event.title}
             eventDate={event.event_date}
@@ -186,6 +190,10 @@ const EventDetail = () => {
             eventDate={event.event_date}
             participantCount={participantCount}
           />
+        </TabsContent>
+
+        <TabsContent value="email-test" className="space-y-4">
+          <EmailTest />
         </TabsContent>
       </Tabs>
     </div>

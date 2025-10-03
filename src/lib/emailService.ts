@@ -198,60 +198,191 @@ EventFlow Team
   }
 };
 
-// Batch send emails to all participants
+// Test EmailJS configuration with a simple email
+export const testEmailJSConfiguration = async (): Promise<boolean> => {
+  try {
+    // Check if EmailJS is configured
+    const isConfigured = 
+      EMAILJS_CONFIG.SERVICE_ID !== 'your_service_id' &&
+      EMAILJS_CONFIG.TEMPLATE_ID !== 'your_template_id' &&
+      EMAILJS_CONFIG.PUBLIC_KEY !== 'your_public_key' &&
+      EMAILJS_CONFIG.SERVICE_ID.trim() !== '' &&
+      EMAILJS_CONFIG.TEMPLATE_ID.trim() !== '' &&
+      EMAILJS_CONFIG.PUBLIC_KEY.trim() !== '';
+
+    if (!isConfigured) {
+      console.error('❌ EmailJS not configured properly');
+      return false;
+    }
+
+    console.log('🧪 Testing EmailJS configuration...');
+    
+    // Initialize EmailJS
+    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+    
+    // Test with minimal data
+    const testParams = {
+      to_name: 'Test User',
+      to_email: 'test@example.com',
+      from_name: 'EventFlow Team',
+      subject: 'Test Email',
+      event_name: 'Test Event',
+      certificate_id: 'TEST123',
+      verification_url: 'https://example.com/verify',
+      reply_to: 'noreply@eventflow.com'
+    };
+    
+    console.log('📤 Sending test email with params:', testParams);
+    
+    const response = await emailjs.send(
+      EMAILJS_CONFIG.SERVICE_ID,
+      EMAILJS_CONFIG.TEMPLATE_ID,
+      testParams
+    );
+    
+    console.log('✅ Test email sent successfully:', response);
+    return true;
+    
+  } catch (error: any) {
+    console.error('❌ EmailJS test failed:', error);
+    console.error('Status:', error.status);
+    console.error('Text:', error.text);
+    console.error('Message:', error.message);
+    return false;
+  }
+};
+
+// Main function to send bulk emails - handles both automated and manual methods
 export const sendBulkCertificateEmails = async (
   participants: Array<{ name: string; email: string; certificateHash: string }>,
   eventTitle: string,
   onProgress?: (progress: number) => void
 ): Promise<{ success: number; failed: number }> => {
-  let success = 0;
-  let failed = 0;
   
-  // Check if EmailJS is configured
+  // Check if EmailJS is properly configured
   const isEmailJSConfigured = 
     EMAILJS_CONFIG.SERVICE_ID !== 'your_service_id' &&
     EMAILJS_CONFIG.TEMPLATE_ID !== 'your_template_id' &&
-    EMAILJS_CONFIG.PUBLIC_KEY !== 'your_public_key';
+    EMAILJS_CONFIG.PUBLIC_KEY !== 'your_public_key' &&
+    EMAILJS_CONFIG.SERVICE_ID.trim() !== '' &&
+    EMAILJS_CONFIG.TEMPLATE_ID.trim() !== '' &&
+    EMAILJS_CONFIG.PUBLIC_KEY.trim() !== '';
 
-  if (!isEmailJSConfigured) {
-    console.warn('EmailJS not configured. Using bulk mailto method.');
+  if (isEmailJSConfigured) {
+    console.log('🚀 EmailJS is configured! Sending automated emails...');
+    return await sendAutomatedEmails(participants, eventTitle, onProgress);
+  } else {
+    console.warn('⚠️ EmailJS not configured. Using manual mailto method.');
+    console.log('💡 To enable automated emails, set up EmailJS in your .env file');
     return await sendBulkMailtoEmails(participants, eventTitle, onProgress);
   }
+};
+
+// NEW: Fully automated email sending using EmailJS (no manual clicks required)
+const sendAutomatedEmails = async (
+  participants: Array<{ name: string; email: string; certificateHash: string }>,
+  eventTitle: string,
+  onProgress?: (progress: number) => void
+): Promise<{ success: number; failed: number }> => {
   
-  // Use EmailJS for each participant (automatic sending)
+  let success = 0;
+  let failed = 0;
+  
+  console.log(`📧 Starting automated email delivery to ${participants.length} participants...`);
+  
+  // Initialize EmailJS with public key
+  try {
+    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+    console.log('✅ EmailJS initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize EmailJS:', error);
+    throw new Error('EmailJS initialization failed');
+  }
+  
+  // Send individual emails automatically
   for (let i = 0; i < participants.length; i++) {
     try {
       const participant = participants[i];
       const verificationUrl = `${window.location.origin}/verify?id=${participant.certificateHash}`;
+      const certificateId = participant.certificateHash.substring(0, 8).toUpperCase();
       
-      const emailData: EmailData = {
-        to: participant.email,
-        participantName: participant.name,
-        eventTitle: eventTitle,
-        certificateId: participant.certificateHash.substring(0, 8).toUpperCase(),
-        verificationUrl: verificationUrl
+      console.log(`📤 Sending email ${i + 1}/${participants.length} to ${participant.name} (${participant.email})`);
+      console.log(`🔍 Certificate ID: ${certificateId}`);
+      console.log(`🔗 Verification URL: ${verificationUrl}`);
+      
+      // Simplified template parameters for EmailJS
+      const templateParams = {
+        to_name: participant.name,
+        to_email: participant.email,
+        from_name: "EventFlow Team",
+        subject: `Your Certificate - ${eventTitle}`,
+        event_name: eventTitle,
+        participant_name: participant.name,
+        certificate_id: certificateId,
+        verification_url: verificationUrl,
+        reply_to: "noreply@eventflow.com"
       };
       
-      const emailSent = await sendCertificateEmail(emailData);
-      if (emailSent) {
-        success++;
-      } else {
-        failed++;
-      }
+      console.log('📋 Template params:', templateParams);
+      console.log('🔧 EmailJS Config:', {
+        serviceId: EMAILJS_CONFIG.SERVICE_ID,
+        templateId: EMAILJS_CONFIG.TEMPLATE_ID,
+        publicKey: EMAILJS_CONFIG.PUBLIC_KEY ? 'SET' : 'NOT SET'
+      });
       
+      // Send email using EmailJS
+      const response = await emailjs.send(
+        EMAILJS_CONFIG.SERVICE_ID,
+        EMAILJS_CONFIG.TEMPLATE_ID,
+        templateParams
+      );
+      
+      console.log(`✅ Email sent successfully to ${participant.name}:`, response.status, response.text);
+      success++;
+      
+      // Update progress
       if (onProgress) {
         onProgress(Math.round(((i + 1) / participants.length) * 100));
       }
       
-      // Add delay between emails to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Add delay between emails to avoid rate limiting (EmailJS allows 200 emails/month on free plan)
+      if (i < participants.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+      }
       
-    } catch (error) {
-      console.error(`Failed to send email to ${participants[i]?.name}:`, error);
+    } catch (error: any) {
+      console.error(`❌ Failed to send email to ${participants[i]?.name}:`, error);
+      
+      // Enhanced error logging for debugging
+      if (error.status) {
+        console.error(`📊 EmailJS Error Status: ${error.status}`);
+      }
+      if (error.text) {
+        console.error(`📄 EmailJS Error Message: ${error.text}`);
+      }
+      if (error.message) {
+        console.error(`💬 Error Details: ${error.message}`);
+      }
+      
+      // Log what we tried to send for debugging
+      console.error('🔍 Debug Info:', {
+        participant: participants[i]?.name,
+        email: participants[i]?.email,
+        serviceId: EMAILJS_CONFIG.SERVICE_ID,
+        templateId: EMAILJS_CONFIG.TEMPLATE_ID,
+        publicKeySet: !!EMAILJS_CONFIG.PUBLIC_KEY
+      });
+      
       failed++;
+      
+      // Continue with next email even if one fails
+      if (onProgress) {
+        onProgress(Math.round(((i + 1) / participants.length) * 100));
+      }
     }
   }
   
+  console.log(`📊 Email delivery complete: ${success} sent, ${failed} failed`);
   return { success, failed };
 };
 
@@ -262,7 +393,106 @@ const sendBulkMailtoEmails = async (
   onProgress?: (progress: number) => void
 ): Promise<{ success: number; failed: number }> => {
   
-  // Option 1: Create a single email with all recipients in BCC
+  // Show user choice for email method
+  const userChoice = confirm(
+    `Choose email method:\n\n` +
+    `OK = Send individual personalized emails to each participant (${participants.length} separate emails)\n` +
+    `Cancel = Send one BCC email to all participants\n\n` +
+    `Recommended: Individual emails for better personalization`
+  );
+
+  if (!userChoice) {
+    // Option 1: Single BCC email with all details
+    return await sendSingleBCCEmail(participants, eventTitle, onProgress);
+  } else {
+    // Option 2: Individual personalized emails (RECOMMENDED)
+    return await sendIndividualPersonalizedEmails(participants, eventTitle, onProgress);
+  }
+};
+
+// Send individual personalized emails to each participant
+const sendIndividualPersonalizedEmails = async (
+  participants: Array<{ name: string; email: string; certificateHash: string }>,
+  eventTitle: string,
+  onProgress?: (progress: number) => void
+): Promise<{ success: number; failed: number }> => {
+  
+  console.log(`📧 Preparing ${participants.length} individual personalized emails...`);
+  
+  // Prepare individual emails for each participant
+  const individualEmails = participants.map(participant => {
+    const verificationUrl = `${window.location.origin}/verify?id=${participant.certificateHash}`;
+    const certificateId = participant.certificateHash.substring(0, 8).toUpperCase();
+    
+    const subject = `🎉 Your Certificate - ${eventTitle}`;
+    const body = `Dear ${participant.name},
+
+🎉 Congratulations on successfully completing ${eventTitle}!
+
+Your personal certificate has been generated with the following unique details:
+
+📋 YOUR CERTIFICATE DETAILS:
+• Certificate ID: ${certificateId}
+• Verification URL: ${verificationUrl}
+• QR Code: Embedded in your PDF certificate
+
+📥 How to access your certificate:
+1. Download the certificates ZIP file from the event page
+2. Find your personal PDF: "${participant.name.replace(/[^a-zA-Z0-9]/g, '_')}_Certificate.pdf"
+3. Your certificate includes a unique QR code for instant verification
+
+📱 QR Code Features:
+• Scan the QR code on your certificate for instant verification
+• The QR code is unique to your certificate only
+• Links directly to your personal verification page
+
+🔗 Manual Verification:
+You can also verify your certificate anytime at:
+${verificationUrl}
+
+📞 Questions? Contact the event organizer.
+
+Best regards,
+EventFlow Team
+
+---
+This certificate is unique to ${participant.name} and cannot be used by anyone else.`;
+    
+    return {
+      to: participant.email,
+      name: participant.name,
+      subject: subject,
+      body: body,
+      mailto: `mailto:${participant.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    };
+  });
+
+  // Open individual emails with delays to avoid overwhelming the browser
+  console.log(`🚀 Opening ${individualEmails.length} individual email clients...`);
+  
+  for (let i = 0; i < individualEmails.length; i++) {
+    setTimeout(() => {
+      const email = individualEmails[i];
+      console.log(`📧 Opening email for ${email.name} (${email.to})`);
+      window.open(email.mailto);
+      
+      if (onProgress) {
+        onProgress(Math.round(((i + 1) / individualEmails.length) * 100));
+      }
+    }, i * 800); // 800ms delay between each email to avoid browser blocking
+  }
+  
+  return { success: participants.length, failed: 0 };
+};
+
+// Send single BCC email with all details
+const sendSingleBCCEmail = async (
+  participants: Array<{ name: string; email: string; certificateHash: string }>,
+  eventTitle: string,
+  onProgress?: (progress: number) => void
+): Promise<{ success: number; failed: number }> => {
+  
+  // Create a single email with all recipients in BCC
   const allEmails = participants.map(p => p.email).join(',');
   const subject = `Your Certificate - ${eventTitle}`;
   
@@ -303,59 +533,12 @@ Best regards,
 EventFlow Team
   `;
 
-  // Single email with all recipients
+  // Single email with all recipients in BCC
   const bulkMailtoLink = `mailto:?bcc=${encodeURIComponent(allEmails)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   
-  // Option 2: Also prepare individual emails as backup
-  const individualEmails = participants.map(participant => {
-    const verificationUrl = `${window.location.origin}/verify?id=${participant.certificateHash}`;
-    const individualSubject = `Your Certificate - ${eventTitle}`;
-    const individualBody = `
-Dear ${participant.name},
-
-Congratulations on completing ${eventTitle}!
-
-Your certificate details:
-- Certificate ID: ${participant.certificateHash.substring(0, 8).toUpperCase()}
-- Verification URL: ${verificationUrl}
-
-You can verify your certificate anytime using the QR code or link above.
-
-Best regards,
-EventFlow Team
-    `;
-    
-    return {
-      to: participant.email,
-      subject: individualSubject,
-      body: individualBody,
-      mailto: `mailto:${participant.email}?subject=${encodeURIComponent(individualSubject)}&body=${encodeURIComponent(individualBody)}`
-    };
-  });
-
-  // Show user options
-  const userChoice = confirm(
-    `Choose email method:\n\n` +
-    `OK = Send one email to all participants (BCC)\n` +
-    `Cancel = Open individual emails for each participant\n\n` +
-    `${participants.length} participants will be notified.`
-  );
-
-  if (userChoice) {
-    // Open single BCC email
-    window.open(bulkMailtoLink);
-    if (onProgress) onProgress(100);
-    return { success: participants.length, failed: 0 };
-  } else {
-    // Open individual emails with delay
-    for (let i = 0; i < individualEmails.length; i++) {
-      setTimeout(() => {
-        window.open(individualEmails[i].mailto);
-        if (onProgress) {
-          onProgress(Math.round(((i + 1) / individualEmails.length) * 100));
-        }
-      }, i * 1000); // 1 second delay between each email
-    }
-    return { success: participants.length, failed: 0 };
-  }
+  console.log('📧 Opening single BCC email with all participants...');
+  window.open(bulkMailtoLink);
+  
+  if (onProgress) onProgress(100);
+  return { success: participants.length, failed: 0 };
 };
