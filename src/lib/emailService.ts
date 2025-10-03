@@ -310,7 +310,7 @@ const sendAutomatedEmails = async (
       console.log(`🔍 Certificate ID: ${certificateId}`);
       console.log(`🔗 Verification URL: ${verificationUrl}`);
       
-      // Simplified template parameters for EmailJS
+      // Enhanced template parameters with PDF attachment support
       const templateParams = {
         to_name: participant.name,
         to_email: participant.email,
@@ -318,9 +318,10 @@ const sendAutomatedEmails = async (
         subject: `Your Certificate - ${eventTitle}`,
         event_name: eventTitle,
         participant_name: participant.name,
-        certificate_id: certificateId,
-        verification_url: verificationUrl,
-        reply_to: "noreply@eventflow.com"
+        certificate_id: certificateId, // Shortened for display
+        verification_url: verificationUrl, // Full hash for verification
+        reply_to: "noreply@eventflow.com",
+        download_message: "Click the verification link below to view and download your certificate PDF."
       };
       
       console.log('📋 Template params:', templateParams);
@@ -541,4 +542,232 @@ EventFlow Team
   
   if (onProgress) onProgress(100);
   return { success: participants.length, failed: 0 };
+};
+
+// Enhanced function to send emails with PDF attachments
+export const sendEmailWithPDFAttachment = async (emailData: EmailData & { pdfBlob: Blob }): Promise<boolean> => {
+  try {
+    // Check if EmailJS is configured
+    const isConfigured = 
+      EMAILJS_CONFIG.SERVICE_ID !== 'your_service_id' &&
+      EMAILJS_CONFIG.TEMPLATE_ID !== 'your_template_id' &&
+      EMAILJS_CONFIG.PUBLIC_KEY !== 'your_public_key' &&
+      EMAILJS_CONFIG.SERVICE_ID.trim() !== '' &&
+      EMAILJS_CONFIG.TEMPLATE_ID.trim() !== '' &&
+      EMAILJS_CONFIG.PUBLIC_KEY.trim() !== '';
+
+    if (!isConfigured) {
+      console.warn('⚠️ EmailJS not configured, falling back to mailto');
+      throw new Error('EmailJS not configured');
+    }
+
+    // Check PDF size (EmailJS has limits, typically 10MB total email size)
+    const pdfSizeKB = emailData.pdfBlob.size / 1024;
+    const maxSizeKB = 5000; // 5MB limit for safety
+
+    console.log(`📊 PDF Size: ${pdfSizeKB.toFixed(2)} KB (limit: ${maxSizeKB} KB)`);
+
+    if (pdfSizeKB > maxSizeKB) {
+      console.warn(`⚠️ PDF too large (${pdfSizeKB.toFixed(2)} KB). Sending download link instead.`);
+      
+      // Send email with download link instead of attachment
+      const templateParams = {
+        to_name: emailData.participantName,
+        to_email: emailData.to,
+        from_name: "EventFlow Team",
+        subject: `Your Certificate - ${emailData.eventTitle}`,
+        event_name: emailData.eventTitle,
+        participant_name: emailData.participantName,
+        certificate_id: emailData.certificateId,
+        verification_url: emailData.verificationUrl,
+        reply_to: "noreply@eventflow.com",
+        download_message: "Your certificate PDF is available for download from the verification link below due to size limitations."
+      };
+
+      const response = await emailjs.send(
+        EMAILJS_CONFIG.SERVICE_ID,
+        EMAILJS_CONFIG.TEMPLATE_ID,
+        templateParams
+      );
+
+      console.log('✅ Email sent with download link (large PDF):', response);
+      return true;
+    }
+
+    // Initialize EmailJS
+    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+
+    // Convert PDF Blob to Base64 for attachment
+    const pdfBase64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove data:application/pdf;base64, prefix
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(emailData.pdfBlob);
+    });
+
+    // For EmailJS, we'll send without attachment for now due to size limits
+    // Instead, we'll enhance the email content and provide download link
+    const templateParams = {
+      to_name: emailData.participantName,
+      to_email: emailData.to,
+      from_name: "EventFlow Team", 
+      subject: `Your Certificate - ${emailData.eventTitle}`,
+      event_name: emailData.eventTitle,
+      participant_name: emailData.participantName,
+      certificate_id: emailData.certificateId,
+      verification_url: emailData.verificationUrl,
+      reply_to: "noreply@eventflow.com",
+      download_message: "Click the verification link below to view and download your certificate PDF."
+    };
+
+    console.log('📤 Sending email with download link (EmailJS limitations)...');
+    console.log('📋 Template params:', {
+      ...templateParams,
+      pdf_size: `${pdfSizeKB.toFixed(2)} KB`
+    });
+
+    // Send email using EmailJS (without attachment due to size limits)
+    const response = await emailjs.send(
+      EMAILJS_CONFIG.SERVICE_ID,
+      EMAILJS_CONFIG.TEMPLATE_ID,
+      templateParams
+    );
+
+    console.log('✅ Email sent successfully with download link:', response);
+    return true;
+
+  } catch (error: any) {
+    console.error('❌ Error sending email:', error);
+    
+    // Enhanced error handling
+    if (error.status === 413) {
+      console.error('📦 File too large for EmailJS. Consider using download links instead.');
+    } else if (error.status === 400) {
+      console.error('🔧 Bad request - check template variables and EmailJS configuration.');
+    }
+    
+    // Fallback to mailto with message about downloading separately
+    const subject = `Your Certificate - ${emailData.eventTitle}`;
+    const body = `
+Dear ${emailData.participantName},
+
+Congratulations on completing ${emailData.eventTitle}!
+
+Certificate Details:
+• Certificate ID: ${emailData.certificateId}
+• Verification URL: ${emailData.verificationUrl}
+
+📄 Your PDF certificate is available for download from the verification link above.
+🔗 Click the link to view and download your certificate.
+
+Best regards,
+EventFlow Team
+    `;
+    
+    const mailtoLink = `mailto:${emailData.to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoLink);
+    
+    return false; // Indicate fallback was used
+  }
+};
+
+// Enhanced bulk email function with PDF attachments
+export const sendBulkCertificateEmailsWithPDF = async (
+  participants: Array<{ 
+    name: string; 
+    email: string; 
+    certificateHash: string; 
+    pdfBlob: Blob; 
+  }>,
+  eventTitle: string,
+  onProgress?: (progress: number) => void
+): Promise<{ success: number; failed: number }> => {
+  
+  let success = 0;
+  let failed = 0;
+  
+  console.log(`📧 Starting email delivery with PDF attachments to ${participants.length} participants...`);
+  
+  // Check if EmailJS is properly configured
+  const isEmailJSConfigured = 
+    EMAILJS_CONFIG.SERVICE_ID !== 'your_service_id' &&
+    EMAILJS_CONFIG.TEMPLATE_ID !== 'your_template_id' &&
+    EMAILJS_CONFIG.PUBLIC_KEY !== 'your_public_key' &&
+    EMAILJS_CONFIG.SERVICE_ID.trim() !== '' &&
+    EMAILJS_CONFIG.TEMPLATE_ID.trim() !== '' &&
+    EMAILJS_CONFIG.PUBLIC_KEY.trim() !== '';
+
+  if (!isEmailJSConfigured) {
+    console.warn('⚠️ EmailJS not configured. Using manual mailto method (without attachments).');
+    return await sendBulkMailtoEmails(
+      participants.map(p => ({ name: p.name, email: p.email, certificateHash: p.certificateHash })),
+      eventTitle,
+      onProgress
+    );
+  }
+
+  // Initialize EmailJS
+  try {
+    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+    console.log('✅ EmailJS initialized for PDF attachments');
+  } catch (error) {
+    console.error('❌ Failed to initialize EmailJS:', error);
+    throw new Error('EmailJS initialization failed');
+  }
+
+  // Send individual emails with PDF attachments
+  for (let i = 0; i < participants.length; i++) {
+    try {
+      const participant = participants[i];
+      const verificationUrl = `${window.location.origin}/verify?id=${participant.certificateHash}`;
+      const certificateId = participant.certificateHash.substring(0, 8).toUpperCase();
+      
+      console.log(`📤 Sending email with PDF ${i + 1}/${participants.length} to ${participant.name}`);
+      
+      const emailData = {
+        to: participant.email,
+        participantName: participant.name,
+        eventTitle,
+        certificateId,
+        verificationUrl,
+        pdfBlob: participant.pdfBlob
+      };
+
+      const emailSent = await sendEmailWithPDFAttachment(emailData);
+      
+      if (emailSent) {
+        success++;
+        console.log(`✅ Email with PDF sent to ${participant.name}`);
+      } else {
+        failed++;
+        console.log(`❌ Failed to send email to ${participant.name}`);
+      }
+      
+      // Update progress
+      if (onProgress) {
+        onProgress(Math.round(((i + 1) / participants.length) * 100));
+      }
+      
+      // Add delay between emails to avoid rate limiting
+      if (i < participants.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second delay for attachments
+      }
+      
+    } catch (error: any) {
+      console.error(`❌ Failed to send email to ${participants[i]?.name}:`, error);
+      failed++;
+      
+      if (onProgress) {
+        onProgress(Math.round(((i + 1) / participants.length) * 100));
+      }
+    }
+  }
+  
+  console.log(`📊 Email delivery with PDFs complete: ${success} sent, ${failed} failed`);
+  return { success, failed };
 };

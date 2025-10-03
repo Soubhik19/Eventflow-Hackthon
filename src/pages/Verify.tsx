@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, XCircle, Search, Award, Calendar, User } from "lucide-react";
+import { CheckCircle, XCircle, Search, Award, Calendar, User, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSearchParams } from "react-router-dom";
+import { generateCertificatePDF } from "@/lib/certificateGenerator";
 
 interface VerificationResult {
   valid: boolean;
@@ -18,16 +20,28 @@ interface VerificationResult {
     event_date: string;
   };
   verified_count?: number;
+  certificateHash?: string;
 }
 
 const Verify = () => {
+  const [searchParams] = useSearchParams();
   const [certificateId, setCertificateId] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Auto-fill certificate ID from URL parameter
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id');
+    if (idFromUrl) {
+      setCertificateId(idFromUrl);
+      // Auto-verify if ID is provided in URL
+      handleVerifyWithId(idFromUrl);
+    }
+  }, [searchParams]);
+
+  const handleVerifyWithId = async (id: string) => {
     setLoading(true);
     setResult(null);
 
@@ -39,7 +53,7 @@ const Verify = () => {
           participant:participants(name, email),
           event:events(title, event_date)
         `)
-        .eq("certificate_hash", certificateId)
+        .eq("certificate_hash", id)
         .single();
 
       if (error || !certificate) {
@@ -65,6 +79,7 @@ const Verify = () => {
           participant: certificate.participant,
           event: certificate.event,
           verified_count: certificate.verified_count + 1,
+          certificateHash: certificate.certificate_hash,
         });
         
         toast({
@@ -81,6 +96,74 @@ const Verify = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const downloadCertificate = async () => {
+    if (!result?.valid || !result.participant || !result.event) {
+      toast({
+        title: "Cannot download",
+        description: "Certificate information not available",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      console.log("🔄 Generating certificate PDF for download...");
+      
+      // Create certificate data
+      const certificateData = {
+        participantName: result.participant.name,
+        eventTitle: result.event.title,
+        eventDate: new Date(result.event.event_date).toLocaleDateString(),
+        certificateId: result.certificateHash || certificateId,
+        verificationUrl: `${window.location.origin}/verify?id=${result.certificateHash || certificateId}`
+      };
+
+      // Generate QR code for the certificate
+      const QRCode = (await import('qrcode')).default;
+      const qrCodeDataURL = await QRCode.toDataURL(certificateData.verificationUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+
+      const pdfBlob = await generateCertificatePDF(certificateData, qrCodeDataURL);
+
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${result.participant.name.replace(/[^a-zA-Z0-9]/g, '_')}_Certificate.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "✅ Download Started",
+        description: "Your certificate PDF is being downloaded",
+      });
+
+    } catch (error) {
+      console.error("Error generating certificate:", error);
+      toast({
+        title: "❌ Download Failed",
+        description: "Could not generate certificate PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleVerifyWithId(certificateId);
   };
 
   return (

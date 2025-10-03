@@ -13,8 +13,8 @@ import CertificateGenerator from "@/components/CertificateGenerator";
 import TestCertificateGenerator from "@/components/TestCertificateGenerator";
 import CertificateDemo from "@/components/CertificateDemo";
 import SimpleTest from "@/components/SimpleTest";
-import DebugCertificate from "@/components/DebugCertificate";
 import EmailTest from "@/components/EmailTest";
+import DebugEmail from "@/components/DebugEmail";
 
 interface Event {
   id: string;
@@ -194,6 +194,7 @@ const EventDetail = () => {
 
         <TabsContent value="email-test" className="space-y-4">
           <EmailTest />
+          <DebugEmail eventId={id!} />
         </TabsContent>
       </Tabs>
     </div>

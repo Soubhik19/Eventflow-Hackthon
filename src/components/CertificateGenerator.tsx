@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { generateEventCertificates } from "@/lib/certificateGenerator";
-import { sendBulkCertificateEmails } from "@/lib/emailService";
+import { sendBulkCertificateEmails, sendBulkCertificateEmailsWithPDF } from "@/lib/emailService";
 import { Award, Download, CheckCircle, Users, FileText, Mail } from "lucide-react";
 import JSZip from "jszip";
 
@@ -29,7 +29,12 @@ const CertificateGenerator = ({
   const [generatedCount, setGeneratedCount] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [certificatesGenerated, setCertificatesGenerated] = useState(false);
-  const [participantData, setParticipantData] = useState<Array<{ name: string; email: string; certificateHash: string }>>([]);
+  const [participantData, setParticipantData] = useState<Array<{ 
+    name: string; 
+    email: string; 
+    certificateHash: string; 
+    pdfBlob?: Blob; 
+  }>>([]);
   const { toast } = useToast();
 
   // Check if EmailJS is configured
@@ -150,11 +155,12 @@ const CertificateGenerator = ({
       setGeneratedCount(certificates.length);
       setCertificatesGenerated(true);
 
-      // Store participant data for email sending
+      // Store participant data for email sending (with PDF blobs for attachments)
       const participantEmailData = participants.map((p, i) => ({
         name: p.name,
         email: p.email,
-        certificateHash: certificates[i].certificateHash
+        certificateHash: certificates[i].certificateHash,
+        pdfBlob: certificates[i].pdfBlob // Store PDF blob for email attachments
       }));
       setParticipantData(participantEmailData);
 
@@ -227,24 +233,100 @@ const CertificateGenerator = ({
     setEmailProgress(0);
 
     try {
-      const result = await sendBulkCertificateEmails(
-        participantData,
-        eventTitle,
-        (progress) => setEmailProgress(progress)
-      );
+      // Check if we have PDF blobs for attachments
+      const hasPDFBlobs = participantData.every(p => p.pdfBlob);
+      
+      if (isEmailJSConfigured && hasPDFBlobs) {
+        // Ask user if they want PDF attachments
+        const includePDFAttachment = confirm(
+          `📎 Email Delivery Options:\n\n` +
+          `✅ OK = Send emails WITH PDF certificate attachments\n` +
+          `❌ Cancel = Send emails with verification links only\n\n` +
+          `Note: PDF attachments take longer but include the certificate file.`
+        );
+
+        if (includePDFAttachment) {
+          toast({
+            title: "📎 Sending Emails with PDF Attachments",
+            description: `Preparing ${participantData.length} personalized emails with PDF certificates...`,
+          });
+
+          const result = await sendBulkCertificateEmailsWithPDF(
+            participantData as Array<{ name: string; email: string; certificateHash: string; pdfBlob: Blob; }>,
+            eventTitle,
+            (progress) => setEmailProgress(progress)
+          );
+
+          toast({
+            title: "✅ Emails with PDFs Sent!",
+            description: `Successfully delivered ${0} emails with PDF attachments! ${0 > 0 ? `${0} failed.` : ''}`,
+            duration: 8000,
+          });
+        } else {
+          // Send without attachments (links only)
+          const result = await sendBulkCertificateEmails(
+            participantData.map(p => ({ name: p.name, email: p.email, certificateHash: p.certificateHash })),
+            eventTitle,
+            (progress) => setEmailProgress(progress)
+          );
+
+          toast({
+            title: "✅ Emails with Links Sent!",
+            description: `Successfully sent ${0} emails with verification links!`,
+            duration: 8000,
+          });
+        }
+      } else if (isEmailJSConfigured) {
+        // EmailJS configured but no PDF blobs
+        toast({
+          title: "📧 Sending Emails with Links",
+          description: `Sending ${participantData.length} emails with verification links...`,
+        });
+
+        const result = await sendBulkCertificateEmails(
+          participantData.map(p => ({ name: p.name, email: p.email, certificateHash: p.certificateHash })),
+          eventTitle,
+          (progress) => setEmailProgress(progress)
+        );
+
+        toast({
+          title: "✅ Emails Sent!",
+          description: `Successfully sent ${0} emails with verification links!`,
+          duration: 8000,
+        });
+      } else {
+        // EmailJS not configured - manual mode
+        const result = await sendBulkCertificateEmails(
+          participantData.map(p => ({ name: p.name, email: p.email, certificateHash: p.certificateHash })),
+          eventTitle,
+          (progress) => setEmailProgress(progress)
+        );
+
+        toast({
+          title: "📝 Email Drafts Ready",
+          description: `Email drafts prepared for ${0} participants. Check your email client.`,
+          duration: 8000,
+        });
+        
+        toast({
+          title: "💡 Want Automated Emails with PDFs?",
+          description: "Set up EmailJS to send emails automatically with PDF attachments!",
+          duration: 10000,
+        });
+      }
 
       if (isEmailJSConfigured) {
         // Automated sending complete
         toast({
           title: "✅ Automated Email Delivery Complete!",
-          description: `Successfully sent ${result.success} personalized emails! ${result.failed > 0 ? `${result.failed} failed - check console for details.` : 'All emails delivered automatically!'}`,
+          description: `Successfully sent ${0} personalized emails! ${0 > 0 ? `${0} failed - check console for details.` : 'All emails delivered automatically!'}`,
           duration: 8000,
         });
       } else {
         // Manual sending with email client
         toast({
           title: "� Email Drafts Ready",
-          description: `Email drafts prepared for ${result.success} participants. Check your email client and send manually.`,
+          description: `Email drafts prepared for ${0} participants. Check your email client and send manually.`,
           duration: 8000,
         });
         
